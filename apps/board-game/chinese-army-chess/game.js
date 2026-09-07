@@ -459,6 +459,9 @@ function getValidMoves(board, x, y, team, gameType) {
   if (!isMovable(piece)) return [];
   // Face-down pieces cannot move
   if (piece.state === STATE_FACE_DOWN) return [];
+  // A piece that has entered a base camp (大本营) cannot move again.
+  // Flip mode skips this: pieces are randomly placed there at setup.
+  if (gameType !== "flip" && isBaseCamp(x, y)) return [];
 
   const isEngineer = piece.name === "工兵";
   let moves;
@@ -511,6 +514,13 @@ function getNormalMoves(board, x, y, team) {
     if (target === null) {
       moves.push({ x: nx, y: ny, type: "move" });
     } else if (target.team !== team) {
+      // Any piece captures the face-up enemy flag and wins
+      if (isFlag(target.name)) {
+        if (target.state !== STATE_FACE_DOWN) {
+          pushUniqueMove(moves, { x: nx, y: ny, type: "capture_flag" });
+        }
+        continue;
+      }
       // Check camp protection
       if (isCamp(nx, ny)) continue;
       if (isBaseCamp(nx, ny)) continue;
@@ -522,39 +532,47 @@ function getNormalMoves(board, x, y, team) {
     }
   }
 
-  // Non-engineer pieces on railway: extra step along railway
+  // Non-engineer pieces on railway slide any number of squares in a straight
+  // line (no turning; only engineers may turn at railway junctions). The
+  // slide stops at the first occupied square; an enemy piece standing there
+  // may be captured if the combat rules allow it.
   if (isOnRailway(x, y)) {
     for (const dir of dirs) {
-      const nx = x + dir.dx;
-      const ny = y + dir.dy;
-      if (!inBounds(nx, ny)) continue;
-      if (!areOnSameRailway(x, y, nx, ny)) continue;
-
-      // Check if already included
-      let dup = false;
-      for (let j = 0; j < moves.length; j++) {
-        if (moves[j].x === nx && moves[j].y === ny) {
-          dup = true;
+      let nx = x + dir.dx;
+      let ny = y + dir.dy;
+      if (!inBounds(nx, ny) || !areOnSameRailway(x, y, nx, ny)) continue;
+      while (true) {
+        const target = board[ny][nx];
+        if (target === null) {
+          pushUniqueMove(moves, { x: nx, y: ny, type: "move" });
+          const tx = nx + dir.dx;
+          const ty = ny + dir.dy;
+          if (!inBounds(tx, ty) || !areOnSameRailway(nx, ny, tx, ty)) break;
+          nx = tx;
+          ny = ty;
+        } else {
+          if (target.team !== team && target.state !== STATE_FACE_DOWN) {
+            if (isFlag(target.name)) {
+              // Any piece captures the face-up enemy flag and wins
+              pushUniqueMove(moves, { x: nx, y: ny, type: "capture_flag" });
+            } else if (!isCamp(nx, ny) && !isBaseCamp(nx, ny) && canCapture(board[y][x], target)) {
+              pushUniqueMove(moves, { x: nx, y: ny, type: "capture" });
+            }
+          }
           break;
-        }
-      }
-      if (dup) continue;
-
-      const target = board[ny][nx];
-      if (target === null) {
-        moves.push({ x: nx, y: ny, type: "move" });
-      } else if (target.team !== team) {
-        if (isCamp(nx, ny)) continue;
-        if (isBaseCamp(nx, ny)) continue;
-        if (target.state === STATE_FACE_DOWN) continue;
-        if (canCapture(board[y][x], target)) {
-          moves.push({ x: nx, y: ny, type: "capture" });
         }
       }
     }
   }
 
   return moves;
+}
+
+function pushUniqueMove(moves, move) {
+  for (const m of moves) {
+    if (m.x === move.x && m.y === move.y) return;
+  }
+  moves.push(move);
 }
 
 function getEngineerMoves(board, x, y, team) {
@@ -676,7 +694,7 @@ function getDiagonalMoves(board, x, y, team) {
         } else if (target.team !== team) {
           // Encountered enemy piece, can capture but cannot continue
           if (target.state === STATE_FACE_DOWN) break;
-          if (isFlag(target.name) && piece.name === "工兵") {
+          if (isFlag(target.name)) {
             moves.push({ x: cx, y: cy, type: "capture_flag" });
           } else if (canCapture(piece, target)) {
             moves.push({ x: cx, y: cy, type: "capture" });
@@ -694,12 +712,8 @@ function getDiagonalMoves(board, x, y, team) {
       const target = board[ny][nx];
       if (target === null) {
         moves.push({ x: nx, y: ny, type: "move" });
-      } else if (
-        target.team !== team &&
-        target.state !== STATE_FACE_DOWN &&
-        isFlag(target.name) &&
-        piece.name === "工兵"
-      ) {
+      } else if (target.team !== team && target.state !== STATE_FACE_DOWN && isFlag(target.name)) {
+        // Any piece captures the face-up enemy flag and wins
         moves.push({ x: nx, y: ny, type: "capture_flag" });
       }
     }
@@ -717,7 +731,7 @@ function moveCard(state, from, to) {
   const piece = state.board[from.y][from.x];
   if (!piece || piece.team !== state.currentTeam) return null;
 
-  const validMoves = getValidMoves(state.board, from.x, from.y, state.currentTeam);
+  const validMoves = getValidMoves(state.board, from.x, from.y, state.currentTeam, state.gameType);
   let valid = null;
   for (const vm of validMoves) {
     if (vm.x === to.x && vm.y === to.y) {

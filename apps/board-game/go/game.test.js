@@ -386,6 +386,33 @@ describe("isLegalMove", () => {
     board[9][10] = WHITE;
     expect(isLegalMove(board, 9, 9, BLACK, null)).toBe(false);
   });
+  it("no ko point when the capturing group is larger than one stone", () => {
+    var board = createBoard();
+    // WHITE stone at (1,1) in atari, its last liberty at (2,1).
+    board[1][1] = WHITE;
+    board[1][0] = BLACK; // (0,1)
+    board[0][1] = BLACK; // (1,0)
+    board[2][1] = BLACK; // (1,2)
+    // BLACK stones at (2,1)... wait: the capture happens at x=2,y=1. The
+    // capturing stone there connects to a friendly stone at (3,1); all other
+    // liberties of the pair are blocked by alive WHITE stones, so after the
+    // capture the BLACK group {(2,1),(3,1)} has exactly one liberty at the
+    // captured point (1,1) but is NOT a single stone: an immediate
+    // recapture takes two stones and never repeats the position, so this is
+    // NOT a ko and no ko point may be set.
+    board[1][3] = BLACK; // (3,1), connects to the capturing stone
+    board[0][2] = WHITE; // (2,0) blocks
+    board[2][2] = WHITE; // (2,2) blocks
+    board[1][4] = WHITE; // (4,1) blocks
+    board[0][3] = WHITE; // (3,0) blocks
+    board[2][3] = WHITE; // (3,2) blocks
+
+    var result = playMove(board, 2, 1, BLACK);
+    expect(result).not.toBeNull();
+    expect(result.captures).toBe(1);
+    expect(result.board[1][1]).toBe(EMPTY);
+    expect(result.koPoint).toBeNull();
+  });
 });
 
 describe("getLegalMoves", () => {

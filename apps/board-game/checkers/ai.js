@@ -28,11 +28,9 @@
       promote,
       inBounds,
       getMoveDirs,
-      getCaptureDirs,
       getSimpleMoves,
       getCaptureMoves,
       getAllMoves,
-      expandChainCaptures,
       applyMove,
       checkGameOver,
       createGameState,
@@ -69,8 +67,9 @@
           }
 
           // Center position bonus
-          const centerDist = Math.abs(r - 3.5) + Math.abs(c - 3.5);
-          score += sign * (7 - centerDist) * WEIGHT_CENTER;
+          const mid = (BOARD_SIZE - 1) / 2;
+          const centerDist = Math.abs(r - mid) + Math.abs(c - mid);
+          score += sign * (mid + 0.5 - centerDist) * WEIGHT_CENTER;
         }
       }
 

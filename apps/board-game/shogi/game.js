@@ -90,9 +90,12 @@ function initializeBoard() {
   board[0][7] = { type: PIECE_TYPES.KNIGHT, player: GOTE, promoted: false };
   board[0][8] = { type: PIECE_TYPES.LANCE, player: GOTE, promoted: false };
 
-  // Gote rooks and bishops
-  board[1][1] = { type: PIECE_TYPES.BISHOP, player: GOTE, promoted: false };
-  board[1][7] = { type: PIECE_TYPES.ROOK, player: GOTE, promoted: false };
+  // Gote rook and bishop. Standard shogi: each side's rook starts on its
+  // own right (file 2), bishop on its own left (file 8). Gote sits at the
+  // top facing down, so its rook is on column 1 (canvas left) and its
+  // bishop on column 7.
+  board[1][1] = { type: PIECE_TYPES.ROOK, player: GOTE, promoted: false };
+  board[1][7] = { type: PIECE_TYPES.BISHOP, player: GOTE, promoted: false };
 
   // Gote pawns
   for (let col = 0; col < BOARD_SIZE; col++) {
@@ -110,9 +113,10 @@ function initializeBoard() {
   board[8][7] = { type: PIECE_TYPES.KNIGHT, player: SENTE, promoted: false };
   board[8][8] = { type: PIECE_TYPES.LANCE, player: SENTE, promoted: false };
 
-  // Sente rooks and bishops
-  board[7][7] = { type: PIECE_TYPES.BISHOP, player: SENTE, promoted: false };
-  board[7][1] = { type: PIECE_TYPES.ROOK, player: SENTE, promoted: false };
+  // Sente rook and bishop: rook on sente's right (column 7, canvas right),
+  // bishop on sente's left (column 1).
+  board[7][7] = { type: PIECE_TYPES.ROOK, player: SENTE, promoted: false };
+  board[7][1] = { type: PIECE_TYPES.BISHOP, player: SENTE, promoted: false };
 
   // Sente pawns
   for (let col = 0; col < BOARD_SIZE; col++) {

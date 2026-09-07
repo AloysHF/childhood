@@ -463,6 +463,57 @@ describe("getValidMoves", () => {
     var canCross2 = moves2.some((m) => m.x === 2 && m.y === 6);
     expect(canCross2).toBe(true);
   });
+
+  it("Non-engineer slides any distance along a straight railway", () => {
+    var board = emptyBoard();
+    board[1][2] = makePiece("排长", RED); // (2,1) on the top horizontal railway
+    var moves = getValidMoves(board, 2, 1, RED);
+    var targets = moves.map((m) => m.x + "," + m.y);
+    // slide left and right along row y=1
+    expect(targets).toContain("1,1");
+    expect(targets).toContain("0,1");
+    expect(targets).toContain("3,1");
+    expect(targets).toContain("4,1");
+  });
+
+  it("Railway slide is blocked by the first piece", () => {
+    var board = emptyBoard();
+    board[1][0] = makePiece("排长", RED);
+    board[1][2] = makePiece("连长", RED); // own piece blocking the row
+    var moves = getValidMoves(board, 0, 1, RED);
+    var targets = moves.map((m) => m.x + "," + m.y);
+    expect(targets).toContain("1,1"); // reachable before the blocker
+    expect(targets).not.toContain("2,1"); // occupied by own piece
+    expect(targets).not.toContain("3,1"); // beyond the blocker
+    expect(targets).not.toContain("4,1");
+  });
+
+  it("Railway slide captures the first enemy piece and stops", () => {
+    var board = emptyBoard();
+    board[1][0] = makePiece("司令", RED);
+    board[1][2] = makePiece("连长", BLUE);
+    var moves = getValidMoves(board, 0, 1, RED);
+    var capture = moves.find((m) => m.x === 2 && m.y === 1);
+    expect(capture).toBeDefined();
+    expect(capture.type).toBe("capture");
+    var targets = moves.map((m) => m.x + "," + m.y);
+    expect(targets).not.toContain("3,1"); // beyond the victim
+    expect(targets).not.toContain("4,1");
+  });
+
+  it("Railway slide does not turn at junctions", () => {
+    var board = emptyBoard();
+    board[1][0] = makePiece("排长", RED); // (0,1) sits on a railway junction
+    var moves = getValidMoves(board, 0, 1, RED);
+    var targets = moves.map((m) => m.x + "," + m.y);
+    // slides down the side vertical railway through the gap row
+    expect(targets).toContain("0,6");
+    expect(targets).toContain("0,10");
+    // but may not turn onto the crossing horizontal railway at (0,5)/(0,6)
+    expect(targets).not.toContain("1,5");
+    expect(targets).not.toContain("1,6");
+    expect(targets).not.toContain("1,10");
+  });
 });
 
 // ============================================================
@@ -513,6 +564,31 @@ describe("moveCard", () => {
     expect(result).not.toBe(null);
     expect(state.gameOver).toBe(true);
     expect(state.winner).toBe(RED);
+  });
+
+  it("Any piece captures the flag in the base camp for victory", () => {
+    var board = emptyBoard();
+    board[1][1] = makePiece("排长", RED); // adjacent to blue base camp (1,0)
+    board[0][1] = makePiece("军旗", BLUE);
+    var state = makeState(board, RED);
+    var result = moveCard(state, { x: 1, y: 1 }, { x: 1, y: 0 });
+    expect(result).not.toBe(null);
+    expect(state.gameOver).toBe(true);
+    expect(state.winner).toBe(RED);
+    expect(state.board[0][1].name).toBe("排长");
+  });
+
+  it("Piece that entered a base camp cannot move again (open mode)", () => {
+    var board = emptyBoard();
+    board[0][1] = makePiece("排长", RED);
+    expect(getValidMoves(board, 1, 0, RED, "open").length).toBe(0);
+    expect(getValidMoves(board, 1, 0, RED, "hidden").length).toBe(0);
+  });
+
+  it("Flip mode allows base camp pieces to move", () => {
+    var board = emptyBoard();
+    board[0][1] = makePiece("排长", RED);
+    expect(getValidMoves(board, 1, 0, RED, "flip").length).toBeGreaterThan(0);
   });
 
   it("Cannot move to illegal position", () => {
@@ -642,13 +718,15 @@ describe("Flag Capture", () => {
     expect(flagMove).not.toBe(undefined);
   });
 
-  it("Non-engineer pieces cannot capture flag", () => {
+  it("Non-engineer pieces can capture flag (standard rule)", () => {
     var board = emptyBoard();
     board[1][0] = makePiece("排长", RED);
     board[0][1] = makePiece("军旗", BLUE);
     var moves = getValidMoves(board, 0, 1, RED);
     var flagMove = moves.find((m) => m.type === "capture_flag");
-    expect(flagMove).toBe(undefined);
+    expect(flagMove).toBeDefined();
+    expect(flagMove.x).toBe(1);
+    expect(flagMove.y).toBe(0);
   });
 
   it("Engineer can reach near base camp via railway", () => {

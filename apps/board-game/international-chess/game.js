@@ -213,6 +213,12 @@ function applyMove(board, move) {
   } else {
     newBoard[move.toC][move.toR] = piece;
   }
+  // En passant: remove the pawn that just double-stepped past the destination.
+  // It sits beside the landing square: same file as the destination, same rank
+  // as the origin.
+  if (move.enPassant) {
+    newBoard[move.toC][move.fromR] = EMPTY;
+  }
   // Castling: move rook
   if (move.castling) {
     if (move.toC === 6) {
@@ -232,13 +238,13 @@ function applyMove(board, move) {
 // Move generation
 // ============================================================
 
-function getValidMoves(board, c, r, hasMoved) {
+function getValidMoves(board, c, r, hasMoved, epTarget) {
   const piece = board[c][r];
   if (piece === EMPTY) return [];
   const color = getOwner(piece);
   let moves = [];
 
-  if (isPawn(piece)) moves = getPawnMoves(board, c, r, color, hasMoved);
+  if (isPawn(piece)) moves = getPawnMoves(board, c, r, color, hasMoved, epTarget);
   else if (isKnight(piece)) moves = getKnightMoves(board, c, r, color);
   else if (isBishop(piece)) moves = getBishopMoves(board, c, r, color);
   else if (isRook(piece)) moves = getRookMoves(board, c, r, color);
@@ -543,7 +549,7 @@ function getKingMoves(board, c, r, color, hasMoved) {
   return moves;
 }
 
-function getPawnMoves(board, c, r, color, hasMoved) {
+function getPawnMoves(board, c, r, color, hasMoved, epTarget) {
   const moves = [];
   const dir = color === WHITE ? -1 : 1;
   const startRow = color === WHITE ? 6 : 1;
@@ -586,15 +592,23 @@ function getPawnMoves(board, c, r, color, hasMoved) {
       }
     }
   }
+  // En passant: available only immediately after the opponent double-stepped a
+  // pawn past this one; the landing square is the one the enemy pawn skipped.
+  if (epTarget && epTarget.r === r + dir && Math.abs(epTarget.c - c) === 1) {
+    const victim = board[epTarget.c][r];
+    if (victim !== EMPTY && isPawn(victim) && getOwner(victim) !== color) {
+      moves.push({ fromC: c, fromR: r, toC: epTarget.c, toR: epTarget.r, enPassant: true });
+    }
+  }
   return moves;
 }
 
-function getAllMoves(board, color, hasMoved) {
+function getAllMoves(board, color, hasMoved, epTarget) {
   const moves = [];
   for (let c = 0; c < BOARD_SIZE; c++) {
     for (let r = 0; r < BOARD_SIZE; r++) {
       if (board[c][r] !== EMPTY && getOwner(board[c][r]) === color) {
-        const pieceMoves = getValidMoves(board, c, r, hasMoved);
+        const pieceMoves = getValidMoves(board, c, r, hasMoved, epTarget);
         for (const pm of pieceMoves) moves.push(pm);
       }
     }
@@ -606,8 +620,8 @@ function getAllMoves(board, color, hasMoved) {
 // Win/loss detection
 // ============================================================
 
-function checkGameOver(board, nextPlayer, hasMoved) {
-  const moves = getAllMoves(board, nextPlayer, hasMoved);
+function checkGameOver(board, nextPlayer, hasMoved, epTarget) {
+  const moves = getAllMoves(board, nextPlayer, hasMoved, epTarget);
   if (moves.length === 0) {
     if (isInCheck(board, nextPlayer))
       return { winner: getOpponent(nextPlayer), reason: "checkmate" };
@@ -650,6 +664,7 @@ function createGameState(mode) {
     validMoves: [],
     lastMove: null,
     hasMoved: new Set(),
+    epTarget: null,
     promotionPending: null,
   };
 }
@@ -1055,7 +1070,13 @@ if (typeof document !== "undefined") {
     }
 
     if (piece !== EMPTY && getOwner(piece) === gameState.currentPlayer) {
-      const moves = getValidMoves(gameState.board, col, row, gameState.hasMoved);
+      const moves = getValidMoves(
+        gameState.board,
+        col,
+        row,
+        gameState.hasMoved,
+        gameState.epTarget
+      );
       if (moves.length > 0) {
         gameState.selectedPiece = { c: col, r: row };
         gameState.validMoves = moves;
@@ -1126,6 +1147,13 @@ if (typeof document !== "undefined") {
       SoundManager.play("slide");
     }
 
+    // Track the skipped square so the opponent can capture en passant next move
+    const movedPiece = gameState.board[move.fromC][move.fromR];
+    gameState.epTarget =
+      isPawn(movedPiece) && Math.abs(move.toR - move.fromR) === 2
+        ? { c: move.fromC, r: (move.fromR + move.toR) / 2 }
+        : null;
+
     gameState.hasMoved.add(move.fromC + "," + move.fromR);
     gameState.hasMoved.add(move.toC + "," + move.toR);
     if (move.castling) {
@@ -1142,7 +1170,12 @@ if (typeof document !== "undefined") {
 
   function endTurn() {
     const nextPlayer = getOpponent(gameState.currentPlayer);
-    const gameOverResult = checkGameOver(gameState.board, nextPlayer, gameState.hasMoved);
+    const gameOverResult = checkGameOver(
+      gameState.board,
+      nextPlayer,
+      gameState.hasMoved,
+      gameState.epTarget
+    );
     if (gameOverResult) {
       gameState.gameOver = true;
       gameState.winner = gameOverResult.winner;
@@ -1171,6 +1204,12 @@ if (typeof document !== "undefined") {
         } else {
           SoundManager.play("slide");
         }
+        // Track the skipped square so the opponent can capture en passant next move
+        const movedPiece = gameState.board[move.fromC][move.fromR];
+        gameState.epTarget =
+          isPawn(movedPiece) && Math.abs(move.toR - move.fromR) === 2
+            ? { c: move.fromC, r: (move.fromR + move.toR) / 2 }
+            : null;
         gameState.hasMoved.add(move.fromC + "," + move.fromR);
         gameState.hasMoved.add(move.toC + "," + move.toR);
         if (move.castling) {

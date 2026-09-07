@@ -112,9 +112,9 @@ describe("board initialization", () => {
     expect(board[0][7].type).toBe(PIECE_TYPES.KNIGHT);
     expect(board[0][8].type).toBe(PIECE_TYPES.LANCE);
 
-    // Gote rooks and bishops
-    expect(board[1][1].type).toBe(PIECE_TYPES.BISHOP);
-    expect(board[1][7].type).toBe(PIECE_TYPES.ROOK);
+    // Gote rook and bishop: rook on gote's own right (col 1), bishop left (col 7)
+    expect(board[1][1].type).toBe(PIECE_TYPES.ROOK);
+    expect(board[1][7].type).toBe(PIECE_TYPES.BISHOP);
 
     // Gote pawns
     for (let col = 0; col < 9; col++) {
@@ -134,9 +134,9 @@ describe("board initialization", () => {
     expect(board[8][7].type).toBe(PIECE_TYPES.KNIGHT);
     expect(board[8][8].type).toBe(PIECE_TYPES.LANCE);
 
-    // Sente rooks and bishops
-    expect(board[7][7].type).toBe(PIECE_TYPES.BISHOP);
-    expect(board[7][1].type).toBe(PIECE_TYPES.ROOK);
+    // Sente rook and bishop: rook on sente's own right (col 7), bishop left (col 1)
+    expect(board[7][7].type).toBe(PIECE_TYPES.ROOK);
+    expect(board[7][1].type).toBe(PIECE_TYPES.BISHOP);
 
     // Sente pawns
     for (let col = 0; col < 9; col++) {

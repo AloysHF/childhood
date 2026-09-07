@@ -182,12 +182,16 @@ function playMove(board, x, y, player) {
     return null; // Suicide, illegal move
   }
 
-  // Ko detection: if only one stone captured and own group has only one liberty, it may be a ko
+  // Ko detection: a simple ko exists only when exactly one stone was
+  // captured and the capturing stone forms a SINGLE-stone group left with
+  // exactly one liberty (the classic ko shape). If the capturing group is
+  // larger, the opponent's recapture would take several stones and never
+  // recreates the previous position, so it must stay legal (e.g. snapbacks).
   let koPoint = null;
   if (totalCaptures === 1 && lastCaptured) {
     const selfGroupAfter = getGroup(newBoard, x, y);
     const selfLibertiesAfter = getLiberties(newBoard, selfGroupAfter.stones);
-    if (selfLibertiesAfter.length === 1) {
+    if (selfGroupAfter.stones.length === 1 && selfLibertiesAfter.length === 1) {
       koPoint = lastCaptured;
     }
   }
@@ -638,8 +642,11 @@ if (typeof document !== "undefined") {
     const isPlayerWin = state.mode === "pve" ? state.winner === state.playerTeam : true;
     SoundManager.play(isPlayerWin ? "victory" : "lose");
     const score = calculateScore(state.board);
-    const blackTotal = score.black + state.capturesBlack;
-    const whiteTotal = score.white + state.capturesWhite + state.komi;
+    // Chinese area scoring: stones on the board + surrounded empty points.
+    // Captured-stone counters are informational only and must not be added
+    // again (the points they occupied already count as territory or stones).
+    const blackTotal = score.black;
+    const whiteTotal = score.white + state.komi;
 
     // Determine winner if not yet decided (count-based ending)
     if (!state.winner) {
@@ -668,14 +675,14 @@ if (typeof document !== "undefined") {
       score.blackStones +
       "子 + " +
       score.blackTerritory +
-      "目 = " +
+      "空 = " +
       blackTotal +
       "<br>" +
       "白棋：" +
       score.whiteStones +
       "子 + " +
       score.whiteTerritory +
-      "目 + " +
+      "空 + " +
       state.komi +
       "贴目 = " +
       whiteTotal;
@@ -762,9 +769,11 @@ if (typeof document !== "undefined") {
     if (gameState.passCount >= 2) {
       // Both passed, game over
       gameState.gameOver = true;
+      // Chinese area scoring: stones + surrounded empty points (+ komi for
+      // white); captures are informational only (see showGameOver).
       const score = calculateScore(gameState.board);
-      const blackTotal = score.black + gameState.capturesBlack;
-      const whiteTotal = score.white + gameState.capturesWhite + gameState.komi;
+      const blackTotal = score.black;
+      const whiteTotal = score.white + gameState.komi;
 
       if (blackTotal > whiteTotal) {
         gameState.winner = BLACK;

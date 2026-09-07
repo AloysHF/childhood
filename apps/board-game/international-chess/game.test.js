@@ -663,6 +663,63 @@ describe("getAllMoves", () => {
   });
 });
 
+describe("En passant", () => {
+  // Black pawn double-stepped d7-d5; white pawn sits on e5.
+  // The skipped square d6 is the en passant target.
+  function epBoard() {
+    var board = [];
+    for (var c = 0; c < 8; c++) board.push(new Array(8).fill(EMPTY));
+    board[3][3] = B_PAWN; // d5: the pawn that just double-stepped
+    board[4][3] = W_PAWN; // e5: capturing pawn
+    return board;
+  }
+  it("generates en passant capture right after a double-step", () => {
+    var moves = getPawnMoves(epBoard(), 4, 3, WHITE, undefined, { c: 3, r: 2 });
+    var ep = moves.filter((m) => m.enPassant);
+    expect(ep.length).toBe(1);
+    expect(ep[0].toC).toBe(3);
+    expect(ep[0].toR).toBe(2);
+  });
+  it("does not generate en passant without a target", () => {
+    var moves = getPawnMoves(epBoard(), 4, 3, WHITE);
+    var ep = moves.filter((m) => m.enPassant);
+    expect(ep.length).toBe(0);
+  });
+  it("en passant removes the victim pawn", () => {
+    var board = epBoard();
+    var newBoard = applyMove(board, { fromC: 4, fromR: 3, toC: 3, toR: 2, enPassant: true });
+    expect(newBoard[4][3]).toBe(EMPTY); // capturing pawn left e5
+    expect(newBoard[3][2]).toBe(W_PAWN); // landed on d6
+    expect(newBoard[3][3]).toBe(EMPTY); // victim removed from d5
+  });
+  it("en passant exposing own king to check is illegal", () => {
+    var board = epBoard();
+    board[7][3] = W_KING; // h5
+    board[0][3] = B_ROOK; // a5: attacks along rank 5 once d5/e5 are vacated
+    var moves = getValidMoves(board, 4, 3, undefined, { c: 3, r: 2 });
+    var ep = moves.filter((m) => m.enPassant);
+    expect(ep.length).toBe(0);
+  });
+  it("checkGameOver sees en passant as a legal escape from stalemate", () => {
+    var board = [];
+    for (var c = 0; c < 8; c++) board.push(new Array(8).fill(EMPTY));
+    board[0][7] = W_KING; // a1, boxed in by the black coverage below
+    board[4][3] = W_PAWN; // e5
+    board[3][3] = B_PAWN; // d5: just double-stepped
+    board[4][2] = B_KNIGHT; // e6: blocks the pawn push
+    board[2][6] = B_PAWN; // c2: covers b1
+    board[1][5] = B_PAWN; // b3: covers a2
+    board[2][7] = B_BISHOP; // c1: covers b2
+    board[6][0] = B_KING; // g8
+    // The only white move is exd6 e.p., so without the target it is stalemate.
+    expect(checkGameOver(board, WHITE, undefined, null)).toEqual({
+      winner: null,
+      reason: "stalemate",
+    });
+    expect(checkGameOver(board, WHITE, undefined, { c: 3, r: 2 })).toBeNull();
+  });
+});
+
 describe("createGameState", () => {
   it("creates correct initial state", () => {
     var state = createGameState("pvp");

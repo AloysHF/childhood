@@ -1,6 +1,9 @@
 /* eslint-disable no-var, no-undef */
 // ============================================================
-// Checkers (Draughts) - Game Core Logic
+// International Draughts (Checkers) - Game Core Logic
+// 10x10 board, FMJD rules: flying kings, men capture forward and
+// backward, mandatory maximum capture, promotion only when the move
+// ends on the last row.
 // ============================================================
 
 if (typeof judgeRPS === "undefined" && typeof require !== "undefined") {
@@ -9,7 +12,7 @@ if (typeof judgeRPS === "undefined" && typeof require !== "undefined") {
   var getRPSName = _gameUtils.getRPSName;
 }
 
-const BOARD_SIZE = 8;
+const BOARD_SIZE = 10;
 const EMPTY = 0;
 const RED = 1; // Red (first player, top)
 const WHITE = 2; // White (second player, bottom)
@@ -25,14 +28,21 @@ const WEIGHT_ADVANCE = 3; // Regular piece advance bonus
 const WEIGHT_CENTER = 5; // Center position bonus
 const WEIGHT_THREATENED = -20; // Threatened piece penalty
 
+const DIAG_DIRS = [
+  [-1, -1],
+  [-1, 1],
+  [1, -1],
+  [1, 1],
+];
+
 function createBoard() {
   const board = [];
   for (let r = 0; r < BOARD_SIZE; r++) {
     const row = [];
     for (let c = 0; c < BOARD_SIZE; c++) {
       if ((r + c) % 2 === 1) {
-        if (r < 3) row.push(RED);
-        else if (r > 4) row.push(WHITE);
+        if (r < 4) row.push(RED);
+        else if (r > 5) row.push(WHITE);
         else row.push(EMPTY);
       } else {
         row.push(EMPTY);
@@ -74,6 +84,8 @@ function getPlayerName(player) {
   return player === RED ? "红方" : "白方";
 }
 
+// A man is promoted only when its move ENDS on the last row (FMJD rules);
+// passing through the last row during a capture keeps it a man.
 function promote(piece, row) {
   if (piece === RED && row === BOARD_SIZE - 1) return RED_KING;
   if (piece === WHITE && row === 0) return WHITE_KING;
@@ -88,42 +100,47 @@ function inBounds(r, c) {
 // Move generation
 // ============================================================
 
-// Get normal move directions for a piece
+// Simple-move directions: men move forward only, kings fly in all 4 diagonals
 function getMoveDirs(piece) {
-  if (piece === RED)
+  if (piece === RED) {
     return [
       [1, -1],
       [1, 1],
     ]; // Red moves down
-  if (piece === WHITE)
+  }
+  if (piece === WHITE) {
     return [
       [-1, -1],
       [-1, 1],
     ]; // White moves up
-  return [
-    [-1, -1],
-    [-1, 1],
-    [1, -1],
-    [1, 1],
-  ]; // King moves in all 4 directions
-}
-
-// Get capture directions for a piece
-function getCaptureDirs(piece) {
-  return getMoveDirs(piece); // Capture directions same as move directions
+  }
+  return DIAG_DIRS; // King moves in all 4 directions
 }
 
 /**
- * Get all possible moves for a piece (excluding captures)
+ * Get all non-capturing moves for a piece.
+ * Men step one square diagonally forward; kings fly any distance
+ * along an open diagonal (international "flying king").
  * Returns [{fromR, fromC, toR, toC}]
  */
 function getSimpleMoves(board, r, c) {
   const piece = board[r][c];
   const moves = [];
-  const dirs = getMoveDirs(piece);
-  for (let i = 0; i < dirs.length; i++) {
-    const nr = r + dirs[i][0];
-    const nc = c + dirs[i][1];
+  if (isKing(piece)) {
+    for (const [dr, dc] of DIAG_DIRS) {
+      let nr = r + dr;
+      let nc = c + dc;
+      while (inBounds(nr, nc) && board[nr][nc] === EMPTY) {
+        moves.push({ fromR: r, fromC: c, toR: nr, toC: nc });
+        nr += dr;
+        nc += dc;
+      }
+    }
+    return moves;
+  }
+  for (const [dr, dc] of getMoveDirs(piece)) {
+    const nr = r + dr;
+    const nc = c + dc;
     if (inBounds(nr, nc) && board[nr][nc] === EMPTY) {
       moves.push({ fromR: r, fromC: c, toR: nr, toC: nc });
     }
@@ -132,31 +149,138 @@ function getSimpleMoves(board, r, c) {
 }
 
 /**
- * Get all capture moves for a piece
- * Returns [{fromR, fromC, toR, toC, capturedR, capturedC}]
+ * Get the first-hop capture candidates for a piece (single jump only).
+ * Used by the AI threat heuristics; the authoritative move generation is
+ * sequence based (see getAllMoves).
+ * Men jump an adjacent enemy piece in ANY direction (forward or backward).
+ * Kings fly over the first enemy piece on a diagonal and land on any empty
+ * square behind it.
  */
 function getCaptureMoves(board, r, c) {
   const piece = board[r][c];
   const moves = [];
-  const dirs = getCaptureDirs(piece);
-  for (let i = 0; i < dirs.length; i++) {
-    const mr = r + dirs[i][0]; // Captured piece position
-    const mc = c + dirs[i][1];
-    const nr = r + dirs[i][0] * 2; // Landing position
-    const nc = c + dirs[i][1] * 2;
-    if (inBounds(nr, nc) && board[nr][nc] === EMPTY) {
-      const mid = board[mr][mc];
-      if (mid !== EMPTY && getOwner(mid) !== getOwner(piece)) {
-        moves.push({ fromR: r, fromC: c, toR: nr, toC: nc, capturedR: mr, capturedC: mc });
+  const owner = getOwner(piece);
+  if (isKing(piece)) {
+    for (const [dr, dc] of DIAG_DIRS) {
+      let sr = r + dr;
+      let sc = c + dc;
+      while (inBounds(sr, sc) && board[sr][sc] === EMPTY) {
+        sr += dr;
+        sc += dc;
+      }
+      if (!inBounds(sr, sc)) continue;
+      if (board[sr][sc] === EMPTY || getOwner(board[sr][sc]) === owner) continue;
+      let lr = sr + dr;
+      let lc = sc + dc;
+      while (inBounds(lr, lc) && board[lr][lc] === EMPTY) {
+        moves.push({ fromR: r, fromC: c, toR: lr, toC: lc, capturedR: sr, capturedC: sc });
+        lr += dr;
+        lc += dc;
       }
     }
+    return moves;
+  }
+  for (const [dr, dc] of DIAG_DIRS) {
+    const mr = r + dr;
+    const mc = c + dc;
+    const lr = r + 2 * dr;
+    const lc = c + 2 * dc;
+    if (!inBounds(lr, lc)) continue;
+    if (board[mr][mc] === EMPTY || getOwner(board[mr][mc]) === owner) continue;
+    if (board[lr][lc] !== EMPTY) continue;
+    moves.push({ fromR: r, fromC: c, toR: lr, toC: lc, capturedR: mr, capturedC: mc });
   }
   return moves;
 }
 
 /**
- * Get all legal moves for a side (forced capture rule)
- * Returns [{fromR, fromC, toR, toC, capturedR?, capturedC?, chainCaptures?}]
+ * Depth-first collection of complete capture sequences for the piece at
+ * (r, c). Captured pieces stay on the board as obstacles until the move is
+ * finished (FMJD rules), and the same enemy piece may never be jumped twice:
+ * both are enforced by keeping the board untouched and tracking captured
+ * squares in a set.
+ */
+function collectCaptureSequences(board, originR, originC, r, c, capturedKeys, victims, results) {
+  const piece = board[originR][originC];
+  const owner = getOwner(piece);
+  const king = isKing(piece);
+  let extended = false;
+
+  for (const [dr, dc] of DIAG_DIRS) {
+    if (!king) {
+      const mr = r + dr;
+      const mc = c + dc;
+      const lr = r + 2 * dr;
+      const lc = c + 2 * dc;
+      if (!inBounds(lr, lc)) continue;
+      const key = mr + "," + mc;
+      if (capturedKeys.has(key)) continue;
+      if (board[mr][mc] === EMPTY || getOwner(board[mr][mc]) === owner) continue;
+      if (board[lr][lc] !== EMPTY) continue;
+      extended = true;
+      const nextKeys = new Set(capturedKeys);
+      nextKeys.add(key);
+      collectCaptureSequences(
+        board,
+        originR,
+        originC,
+        lr,
+        lc,
+        nextKeys,
+        victims.concat([{ r: mr, c: mc }]),
+        results
+      );
+    } else {
+      let sr = r + dr;
+      let sc = c + dc;
+      // Fly over empty squares to the first piece on the diagonal
+      while (inBounds(sr, sc) && board[sr][sc] === EMPTY) {
+        sr += dr;
+        sc += dc;
+      }
+      if (!inBounds(sr, sc)) continue;
+      const key = sr + "," + sc;
+      if (capturedKeys.has(key)) continue;
+      if (board[sr][sc] === EMPTY || getOwner(board[sr][sc]) === owner) continue;
+      // Land on any empty square behind the victim
+      let lr = sr + dr;
+      let lc = sc + dc;
+      while (inBounds(lr, lc) && board[lr][lc] === EMPTY) {
+        extended = true;
+        const nextKeys = new Set(capturedKeys);
+        nextKeys.add(key);
+        collectCaptureSequences(
+          board,
+          originR,
+          originC,
+          lr,
+          lc,
+          nextKeys,
+          victims.concat([{ r: sr, c: sc }]),
+          results
+        );
+        lr += dr;
+        lc += dc;
+      }
+    }
+  }
+
+  if (!extended && victims.length > 0) {
+    results.push({
+      fromR: originR,
+      fromC: originC,
+      toR: r,
+      toC: c,
+      captures: victims,
+    });
+  }
+}
+
+/**
+ * Get all legal moves for a side.
+ * Captures are mandatory: when any capture exists, only the capture
+ * sequences taking the maximum number of pieces are legal (quantity rule;
+ * a king counts the same as a man).
  */
 function getAllMoves(board, player) {
   const allCaptures = [];
@@ -164,69 +288,49 @@ function getAllMoves(board, player) {
 
   for (let r = 0; r < BOARD_SIZE; r++) {
     for (let c = 0; c < BOARD_SIZE; c++) {
-      if (getOwner(board[r][c]) === player) {
-        const caps = getCaptureMoves(board, r, c);
-        for (const cap of caps) {
-          allCaptures.push(cap);
-        }
-        const sims = getSimpleMoves(board, r, c);
-        for (const sim of sims) {
-          allSimple.push(sim);
-        }
+      if (getOwner(board[r][c]) !== player) continue;
+      const sequences = [];
+      collectCaptureSequences(board, r, c, r, c, new Set(), [], sequences);
+      for (const seq of sequences) {
+        allCaptures.push(seq);
+      }
+      for (const sim of getSimpleMoves(board, r, c)) {
+        allSimple.push(sim);
       }
     }
   }
 
-  // Forced capture: must capture when available
   if (allCaptures.length > 0) {
-    // Expand multi-jump: check if each capture can continue
-    const expanded = [];
-    for (const capture of allCaptures) {
-      expandChainCaptures(board, capture, player, expanded);
+    let maxLen = 0;
+    for (const cap of allCaptures) {
+      if (cap.captures.length > maxLen) maxLen = cap.captures.length;
     }
-    return expanded;
+    const maximal = [];
+    for (const cap of allCaptures) {
+      if (cap.captures.length === maxLen) maximal.push(cap);
+    }
+    return maximal;
   }
   return allSimple;
 }
 
 /**
- * Recursively expand chain captures
- */
-function expandChainCaptures(board, move, player, result) {
-  const newBoard = applyMove(board, move);
-  const piece = newBoard[move.toR][move.toC];
-  // Check if promoted to king
-  const promoted = promote(piece, move.toR);
-  if (promoted !== piece) {
-    newBoard[move.toR][move.toC] = promoted;
-    // Cannot continue after promotion (checkers rule: turn ends on promotion)
-    result.push(move);
-    return;
-  }
-  // Check if can continue capturing
-  const nextCaps = getCaptureMoves(newBoard, move.toR, move.toC);
-  if (nextCaps.length === 0) {
-    result.push(move);
-  } else {
-    for (const nextCap of nextCaps) {
-      expandChainCaptures(newBoard, nextCap, player, result);
-    }
-  }
-}
-
-/**
- * Apply move to board (returns new board)
+ * Apply move to board (returns new board).
+ * The move carries the full capture sequence; promotion is applied only
+ * for a man whose move ends on the last row.
  */
 function applyMove(board, move) {
   const newBoard = copyBoard(board);
   const piece = newBoard[move.fromR][move.fromC];
   newBoard[move.fromR][move.fromC] = EMPTY;
-  const promoted = promote(piece, move.toR);
-  newBoard[move.toR][move.toC] = promoted;
-  // If capture, remove captured piece
-  if (move.capturedR !== undefined) {
+  if (move.captures) {
+    for (const cap of move.captures) {
+      newBoard[cap.r][cap.c] = EMPTY;
+    }
+  } else if (move.capturedR !== undefined) {
     newBoard[move.capturedR][move.capturedC] = EMPTY;
   }
+  newBoard[move.toR][move.toC] = promote(piece, move.toR);
   return newBoard;
 }
 
@@ -279,7 +383,6 @@ function createGameState(mode) {
     validMoves: [], // Valid moves for selected piece
     mustCapture: false, // Whether forced capture
     lastMove: null,
-    multiJumpPiece: null, // Piece position during chain capture
   };
 }
 
@@ -315,11 +418,9 @@ const { AI_DEPTH, evaluateBoard, evaluateThreats, alphaBeta, getBestAIMove } = c
   promote,
   inBounds,
   getMoveDirs,
-  getCaptureDirs,
   getSimpleMoves,
   getCaptureMoves,
   getAllMoves,
-  expandChainCaptures,
   applyMove,
   checkGameOver,
   createGameState,
@@ -520,8 +621,6 @@ if (typeof document !== "undefined") {
       updateMessage("电脑正在思考...", "info");
     } else if (state.mode === "pve" && state.currentPlayer === state.aiTeam) {
       updateMessage("轮到电脑行动", "info");
-    } else if (state.multiJumpPiece) {
-      updateMessage("可以继续吃子！", "info");
     } else if (state.mustCapture) {
       updateMessage("必须吃子！请选择吃子棋子", "info");
     } else {
@@ -586,31 +685,17 @@ if (typeof document !== "undefined") {
     return false;
   }
 
-  // Get legal moves for a piece (considering forced capture rule)
+  // Get legal moves for a piece: the mandatory-maximum capture sequences of
+  // this piece (empty if another piece must capture instead), or its simple
+  // moves when no capture exists anywhere.
   function getLegalMovesForPiece(board, r, c, player) {
-    const mustCapture = getMustCapture(board, player);
-    if (mustCapture) {
-      return getCaptureMoves(board, r, c);
-    }
-    return getSimpleMoves(board, r, c);
+    return getAllMoves(board, player).filter((m) => m.fromR === r && m.fromC === c);
   }
 
   function handleCanvasClick(e) {
     if (!gameState || gameState.gameOver || gameState.aiThinking) return;
     if (gameState.mode === "pve" && gameState.currentPlayer === gameState.aiTeam) return;
     if (gameState.mode === "online" && gameState.currentPlayer !== localTeam) return;
-    // During chain capture, only allow clicking current piece
-    if (gameState.multiJumpPiece) {
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      const px = (e.clientX - rect.left) * scaleX;
-      const py = (e.clientY - rect.top) * scaleY;
-      const col = Math.floor(px / CELL_SIZE);
-      const row = Math.floor(py / CELL_SIZE);
-      handleMultiJumpClick(row, col);
-      return;
-    }
 
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
@@ -650,45 +735,13 @@ if (typeof document !== "undefined") {
             tr: move.toR,
             tc: move.toC,
           };
-          if (move.capturedR !== undefined) {
-            actionData.cr = move.capturedR;
-            actionData.cc = move.capturedC;
+          if (move.captures && move.captures.length > 0) {
+            actionData.cs = move.captures;
           }
           networkProtocol.sendAction(actionData);
         }
       } else {
         updateMessage("无效的目标位置", "error");
-      }
-    }
-  }
-
-  function handleMultiJumpClick(row, col) {
-    const mp = gameState.multiJumpPiece;
-    // Clicking current piece itself ends chain capture
-    if (row === mp.r && col === mp.c) {
-      gameState.multiJumpPiece = null;
-      gameState.selectedPiece = null;
-      gameState.validMoves = [];
-      endTurn();
-      return;
-    }
-    // Try to continue capturing
-    const move = findMove(gameState.validMoves, row, col);
-    if (move) {
-      doMultiJumpMove(move);
-      if (gameState.mode === "online" && networkProtocol) {
-        const actionData = {
-          a: "move",
-          fr: move.fromR,
-          fc: move.fromC,
-          tr: move.toR,
-          tc: move.toC,
-        };
-        if (move.capturedR !== undefined) {
-          actionData.cr = move.capturedR;
-          actionData.cc = move.capturedC;
-        }
-        networkProtocol.sendAction(actionData);
       }
     }
   }
@@ -702,71 +755,20 @@ if (typeof document !== "undefined") {
 
   function doMove(move) {
     // Play sound based on move type
-    if (move.capturedR !== undefined) {
+    if (move.captures && move.captures.length > 0) {
       SoundManager.play("take");
     } else {
       SoundManager.play("slide");
     }
+    // The move is a complete capture sequence (or a simple move); applying it
+    // removes every captured piece and promotes only if the move ends on the
+    // last row.
     gameState.board = applyMove(gameState.board, move);
     gameState.lastMove = move;
     gameState.selectedPiece = null;
     gameState.validMoves = [];
     gameState.turnCount++;
-
-    // Check if promoted to king and need to end turn
-    const piece = gameState.board[move.toR][move.toC];
-    if (move.capturedR !== undefined) {
-      // After capture, check if can continue capturing
-      const promoted = promote(gameState.board[move.toR][move.toC], move.toR);
-      if (promoted !== piece) {
-        gameState.board[move.toR][move.toC] = promoted;
-        // Turn ends after promotion
-        endTurn();
-        return;
-      }
-      const nextCaps = getCaptureMoves(gameState.board, move.toR, move.toC);
-      if (nextCaps.length > 0) {
-        // Chain capture
-        gameState.multiJumpPiece = { r: move.toR, c: move.toC };
-        gameState.selectedPiece = { r: move.toR, c: move.toC };
-        gameState.validMoves = nextCaps;
-        renderGame(gameState);
-        return;
-      }
-    }
     endTurn();
-  }
-
-  function doMultiJumpMove(move) {
-    SoundManager.play("take");
-    gameState.board = applyMove(gameState.board, move);
-    gameState.lastMove = move;
-    gameState.turnCount++;
-
-    // Check if promoted to king
-    const piece = gameState.board[move.toR][move.toC];
-    const promoted = promote(piece, move.toR);
-    if (promoted !== piece) {
-      gameState.board[move.toR][move.toC] = promoted;
-      gameState.multiJumpPiece = null;
-      gameState.selectedPiece = null;
-      gameState.validMoves = [];
-      endTurn();
-      return;
-    }
-
-    const nextCaps = getCaptureMoves(gameState.board, move.toR, move.toC);
-    if (nextCaps.length > 0) {
-      gameState.multiJumpPiece = { r: move.toR, c: move.toC };
-      gameState.selectedPiece = { r: move.toR, c: move.toC };
-      gameState.validMoves = nextCaps;
-      renderGame(gameState);
-    } else {
-      gameState.multiJumpPiece = null;
-      gameState.selectedPiece = null;
-      gameState.validMoves = [];
-      endTurn();
-    }
   }
 
   function endTurn() {
@@ -798,7 +800,7 @@ if (typeof document !== "undefined") {
       gameState.aiThinking = false;
       if (move) {
         // Play sound based on move type
-        if (move.capturedR !== undefined) {
+        if (move.captures && move.captures.length > 0) {
           SoundManager.play("take");
         } else {
           SoundManager.play("slide");
@@ -806,37 +808,9 @@ if (typeof document !== "undefined") {
         gameState.board = applyMove(gameState.board, move);
         gameState.lastMove = move;
         gameState.turnCount++;
-        // AI chain capture
-        simulateAIChainCaptures(move);
-      } else {
-        endTurn();
       }
+      endTurn();
     }, 300);
-  }
-
-  function simulateAIChainCaptures(move) {
-    const piece = gameState.board[move.toR][move.toC];
-    const promoted = promote(piece, move.toR);
-    if (promoted !== piece) {
-      gameState.board[move.toR][move.toC] = promoted;
-      endTurn();
-      return;
-    }
-    const nextCaps = getCaptureMoves(gameState.board, move.toR, move.toC);
-    if (nextCaps.length > 0) {
-      // AI continues capture (simple strategy: pick first)
-      const nextMove = nextCaps[0];
-      SoundManager.play("take");
-      renderGame(gameState);
-      setTimeout(() => {
-        gameState.board = applyMove(gameState.board, nextMove);
-        gameState.lastMove = nextMove;
-        gameState.turnCount++;
-        simulateAIChainCaptures(nextMove);
-      }, 300);
-    } else {
-      endTurn();
-    }
   }
 
   function startGame(mode, firstPlayer) {
@@ -1053,13 +1027,10 @@ if (typeof document !== "undefined") {
       fromC: actionData.fc,
       toR: actionData.tr,
       toC: actionData.tc,
+      captures: actionData.cs || [],
     };
-    if (actionData.cr !== undefined) {
-      move.capturedR = actionData.cr;
-      move.capturedC = actionData.cc;
-    }
     // Apply the move directly without network send
-    if (move.capturedR !== undefined) {
+    if (move.captures.length > 0) {
       SoundManager.play("take");
     } else {
       SoundManager.play("slide");
@@ -1069,26 +1040,6 @@ if (typeof document !== "undefined") {
     gameState.selectedPiece = null;
     gameState.validMoves = [];
     gameState.turnCount++;
-
-    // Check chain capture for remote player
-    const piece = gameState.board[move.toR][move.toC];
-    if (move.capturedR !== undefined) {
-      const promoted = promote(gameState.board[move.toR][move.toC], move.toR);
-      if (promoted !== piece) {
-        gameState.board[move.toR][move.toC] = promoted;
-        endTurn();
-        return;
-      }
-      const nextCaps = getCaptureMoves(gameState.board, move.toR, move.toC);
-      if (nextCaps.length > 0) {
-        // Remote player has chain capture - wait for more actions
-        gameState.multiJumpPiece = { r: move.toR, c: move.toC };
-        gameState.selectedPiece = { r: move.toR, c: move.toC };
-        gameState.validMoves = nextCaps;
-        renderGame(gameState);
-        return;
-      }
-    }
     endTurn();
   }
 
