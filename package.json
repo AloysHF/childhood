@@ -23,7 +23,7 @@
     "fast-check": "^4.9.0",
     "lebab": "^3.2.9",
     "prettier": "^3.9.6",
-    "vitest": "^4.1.11",
+    "vitest": "^5.0.0",
     "vitest-sonar-reporter": "^3.0.0"
   }
 }
