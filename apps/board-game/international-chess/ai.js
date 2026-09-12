@@ -1,4 +1,4 @@
-/* eslint-disable no-var, no-unused-vars, prefer-arrow-callback */
+/* eslint-disable no-unused-vars, prefer-arrow-callback */
 (function (root, factory) {
   const api = factory();
   if (typeof module !== "undefined" && module.exports) module.exports = api;
@@ -67,6 +67,8 @@
 
     const AI_DEPTH = 3;
 
+    const QUIESCENCE_MAX_PLY = 6;
+
     function getPositionValue(piece, c, r) {
       if (piece === W_PAWN) return PAWN_POS_WHITE[c][r];
       if (piece === B_PAWN) return PAWN_POS_BLACK[c][r];
@@ -90,17 +92,63 @@
       return aiScore - oppScore;
     }
 
+    // MVV-LVA: order captures by the value of the victim minus the value of
+    // the attacker so the cheapest winning captures are searched first and
+    // alpha-beta cuts arrive as early as possible.
+    function moveOrderScore(board, move) {
+      let score = 0;
+      if (move.promotion) score += 800;
+      const victim = board[move.toC][move.toR];
+      if (victim !== EMPTY) {
+        score += PIECE_VALUES[victim] * 10 - PIECE_VALUES[board[move.fromC][move.fromR]];
+      }
+      return score;
+    }
+
+    // Capture-only search at the horizon: resolves hanging-piece sequences so
+    // the static evaluation is only trusted in quiet positions.
+    function quiescence(board, alpha, beta, sideToMove, hasMoved, ply) {
+      const standPat = evaluateBoard(board, sideToMove);
+      if (standPat >= beta) return beta;
+      if (standPat > alpha) alpha = standPat;
+      if (ply >= QUIESCENCE_MAX_PLY) return alpha;
+
+      const moves = getAllMoves(board, sideToMove, hasMoved);
+      const captures = moves.filter((m) => board[m.toC][m.toR] !== EMPTY || m.promotion);
+      if (captures.length === 0) return alpha;
+
+      captures.sort((a, b) => moveOrderScore(board, b) - moveOrderScore(board, a));
+      for (const move of captures) {
+        const newBoard = applyMove(board, move);
+        const score = -quiescence(
+          newBoard,
+          -beta,
+          -alpha,
+          getOpponent(sideToMove),
+          hasMoved,
+          ply + 1
+        );
+        if (score >= beta) return beta;
+        if (score > alpha) alpha = score;
+      }
+      return alpha;
+    }
+
     function alphaBeta(board, depth, alpha, beta, aiColor, isAITurn, hasMoved) {
       const currentPlayer = isAITurn ? aiColor : getOpponent(aiColor);
       const gameOver = checkGameOver(board, currentPlayer, hasMoved);
       if (gameOver) {
-        if (gameOver.winner === aiColor) return 99999 + depth;
+        // Scores are relative to the side to move (negamax): winning on the
+        // move is good, being checkmated is bad, independent of aiColor.
+        if (gameOver.winner === currentPlayer) return 99999 + depth;
         if (gameOver.winner === null) return 0; // Draw
         return -99999 - depth;
       }
-      if (depth === 0) return evaluateBoard(board, aiColor);
+      if (depth === 0) return quiescence(board, alpha, beta, currentPlayer, hasMoved, 0);
 
       const moves = getAllMoves(board, currentPlayer, hasMoved);
+      moves.sort((a, b) => moveOrderScore(board, b) - moveOrderScore(board, a));
+
       let bestScore = -Infinity;
 
       for (const move of moves) {
@@ -129,25 +177,7 @@
       let bestScore = -Infinity;
 
       // Prioritize captures and promotions
-      moves.sort((a, b) => {
-        let scoreA;
-        if (a.promotion) {
-          scoreA = 800;
-        } else if (board[a.toC][a.toR] === EMPTY) {
-          scoreA = 0;
-        } else {
-          scoreA = PIECE_VALUES[board[a.toC][a.toR]];
-        }
-        let scoreB;
-        if (b.promotion) {
-          scoreB = 800;
-        } else if (board[b.toC][b.toR] === EMPTY) {
-          scoreB = 0;
-        } else {
-          scoreB = PIECE_VALUES[board[b.toC][b.toR]];
-        }
-        return scoreB - scoreA;
-      });
+      moves.sort((a, b) => moveOrderScore(board, b) - moveOrderScore(board, a));
 
       for (const move of moves) {
         const newBoard = applyMove(board, move);
@@ -155,7 +185,7 @@
           newBoard,
           searchDepth - 1,
           -Infinity,
-          Infinity,
+          -bestScore,
           aiColor,
           false,
           hasMoved
@@ -168,7 +198,16 @@
       return bestMove;
     }
 
-    return { AI_DEPTH, getPositionValue, evaluateBoard, alphaBeta, getBestAIMove };
+    return {
+      AI_DEPTH,
+      QUIESCENCE_MAX_PLY,
+      getPositionValue,
+      evaluateBoard,
+      moveOrderScore,
+      quiescence,
+      alphaBeta,
+      getBestAIMove,
+    };
   }
   return { createGameAI };
 });
