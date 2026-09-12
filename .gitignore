@@ -35,3 +35,6 @@ tmp/
 
 # Vitest coverage output
 coverage/
+
+# AI shootout baseline snapshots
+.tmp-ai-baseline/
