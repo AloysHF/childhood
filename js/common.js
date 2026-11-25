@@ -41,7 +41,7 @@ document.addEventListener("DOMContentLoaded", () => {
     '  <svg viewBox="0 0 16 16"><path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8zm9-3a1 1 0 11-2 0 1 1 0 012 0zM8 7a1 1 0 00-1 1v3a1 1 0 102 0V8a1 1 0 00-1-1z"/></svg>',
     "</a>",
     // QQ group
-    '<a class="github-icon" href="https://qm.qq.com/q/Chd6DaG68a" target="_blank" title="QQ群交流">',
+    '<a class="github-icon" href="https://qm.qq.com/q/LAO7DKAWUC" target="_blank" title="QQ群交流">',
     '  <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 5.82 2 10.5c0 2.34 1.05 4.47 2.78 6.05-.27 1.88-.82 3.3-1.28 4.2-.15.3.02.55.12.65.1.1.3.15.55.05.7-.3 1.8-.85 2.83-1.65.75.2 1.55.35 2.4.45-.07.3-.12.6-.15.9-.05.5.2.75.45.85.25.1.55.05.8-.15.55-.45 1.05-1.15 1.45-2.1 1.05.25 2.15.4 3.3.4 5.52 0 10-3.82 10-8.5S17.52 2 12 2z"/></svg>',
     "</a>",
     // Bookmark

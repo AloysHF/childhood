@@ -11,6 +11,8 @@
   <a href="https://aloyshf.github.io/childhood/"><img src="https://img.shields.io/badge/GitHub%20Pages-live-brightgreen" alt="GitHub Pages"></a>
   <a href="https://childhood-cck.pages.dev/"><img src="https://img.shields.io/badge/Cloudflare%20Pages-mirror-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Pages"></a>
   <a href="https://sonarcloud.io/dashboard?id=AloysHF_childhood"><img src="https://sonarcloud.io/api/project_badges/measure?project=AloysHF_childhood&metric=alert_status" alt="Quality Gate Status"></a>
+  <a href="https://discord.gg/E4SQjXUkZy"><img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://qm.qq.com/q/LAO7DKAWUC"><img src="https://img.shields.io/badge/QQ%E7%BE%A4-Join%20Us-12B7F5?logo=tencent-qq&logoColor=white" alt="QQ Group"></a>
 </p>
 
 一个纯前端经典游戏合集，收录了 **27 款**童年桌游与卡牌游戏，开箱即玩。支持双人对战、人机对战和联网对战；人机模式可在对局中切换简单、普通、困难和大师四档 AI 难度。
@@ -141,12 +143,6 @@ npm test
 # 监听模式
 npm run test:watch
 ```
-
-## 交流群
-
-欢迎加入QQ交流群，一起讨论游戏玩法、反馈问题或分享童年回忆：
-
-<img src="images/qrcode_1778427076704.jpg" alt="QQ交流群" width="200">
 
 ## 许可证
 
