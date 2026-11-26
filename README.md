@@ -15,7 +15,7 @@
   <a href="https://qm.qq.com/q/LAO7DKAWUC"><img src="https://img.shields.io/badge/QQ%E7%BE%A4-Join%20Us-12B7F5?logo=tencent-qq&logoColor=white" alt="QQ Group"></a>
 </p>
 
-一个纯前端经典游戏合集，收录了 **27 款**童年桌游与卡牌游戏，开箱即玩。支持双人对战、人机对战和联网对战；人机模式可在对局中切换简单、普通、困难和大师四档 AI 难度。
+一个纯前端经典游戏合集，收录了 **28 款**童年桌游与卡牌游戏，开箱即玩。支持双人对战、人机对战和联网对战；人机模式可在对局中切换简单、普通、困难和大师四档 AI 难度。
 
 **在线体验**：[GitHub Pages（主站）](https://aloyshf.github.io/childhood/) · [Cloudflare Pages（镜像）](https://childhood-cck.pages.dev/)
 
@@ -71,6 +71,10 @@
 |:-------:|:-----:|:------:|:-----:|
 | ![钻牛角尖](images/childhood-board-game/钻牛角尖.jpg) | ![摆四龙](images/childhood-board-game/摆四龙.jpg) | ![蚂蚁搬家](images/childhood-board-game/蚂蚁搬家.jpg) | ![四步钉](images/childhood-board-game/四步钉.jpg) |
 
+| 数字华容道 |
+|:----------:|
+| ![数字华容道](images/childhood-board-game/数字华容道.jpg) |
+
 ## 项目结构
 
 ```
@@ -106,7 +110,8 @@ childhood/
 │   │   ├── zuan-niu-jiao-jian/       # 钻牛角尖
 │   │   ├── bai-si-long/              # 摆四龙
 │   │   ├── ma-yi-ban-jia/            # 蚂蚁搬家
-│   │   └── si-bu-ding/               # 四步钉
+│   │   ├── si-bu-ding/               # 四步钉
+│   │   └── number-puzzle/            # 数字华容道
 │   └── common/                       # 共享模块
 │       ├── card-game-core.js         # 卡牌游戏核心逻辑
 │       ├── game-utils.js             # 游戏工具函数

@@ -272,6 +272,16 @@
     </image:image>
   </url>
   <url>
+    <loc>https://aloyshf.github.io/childhood/apps/childhood-board-game/number-puzzle/index.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <image:image>
+      <image:loc>https://aloyshf.github.io/childhood/images/childhood-board-game/%E6%95%B0%E5%AD%97%E5%8D%8E%E5%AE%B9%E9%81%93.jpg</image:loc>
+      <image:title>数字华容道 - 童年滑块拼图游戏</image:title>
+    </image:image>
+  </url>
+  <url>
     <loc>https://aloyshf.github.io/childhood/apps/dice-game/monopoly/index.html</loc>
     <lastmod>2026-06-13</lastmod>
     <changefreq>weekly</changefreq>
